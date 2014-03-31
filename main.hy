@@ -1,16 +1,15 @@
-(import os sys logging)
-(import [bottle [run route])
+(import os sys logging bottle)
+(import [bottle [DEBUG default_app run route]])
 
+(setv DEBUG true)
 (def log (.getLogger logging))
+(def app (default_app))
 
 (route "/" ["GET"]
-    (.debug log "Hy there!")
-    (fn [] "Hy there!"))
-
-(def app (.default_app bottle))
-
-(setv (.DEBUG bottle) true)
+    (fn []
+        (.debug log "Hy there!")
+        "Hy there!"))
 
 (kwapply (run)
-    {"app"    app
+    {"app" app
      "server" "gae"})

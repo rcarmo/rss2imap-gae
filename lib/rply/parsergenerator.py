@@ -130,12 +130,16 @@ class ParserGenerator(object):
                 "rply-%s-%s-%s.json" % (self.VERSION, self.cache_id, self.compute_grammar_hash(g))
             )
         else:
-            cache_file = os.path.join(
-                tempfile.gettempdir(),
-                "rply-%s-%s-%s-%s.json" % (self.VERSION, os.getuid(), self.cache_id, self.compute_grammar_hash(g))
-            )
+            try:
+                cache_file = os.path.join(
+                    tempfile.gettempdir(),
+                    "rply-%s-%s-%s-%s.json" % (self.VERSION, os.getuid(), self.cache_id, self.compute_grammar_hash(g))
+                )
+            except NotImplementedError:
+                cache_file = None
+
         table = None
-        if os.path.exists(cache_file):
+        if cache_file and os.path.exists(cache_file):
             with open(cache_file) as f:
                 data = json.load(f)
                 stat_result = os.fstat(f.fileno())
@@ -149,9 +153,10 @@ class ParserGenerator(object):
                     table = LRTable.from_cache(g, data)
         if table is None:
             table = LRTable.from_grammar(g)
-            fd = os.open(cache_file, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o0600)
-            with os.fdopen(fd, "w") as f:
-                json.dump(self.serialize_table(table), f)
+            if cache_file:
+                fd = os.open(cache_file, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o0600)
+                with os.fdopen(fd, "w") as f:
+                    json.dump(self.serialize_table(table), f)
         if table.sr_conflicts:
             warnings.warn(
                 "%d shift/reduce conflict%s" % (len(table.sr_conflicts), "s" if len(table.sr_conflicts) > 1 else ""),
