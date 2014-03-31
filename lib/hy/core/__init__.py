@@ -1,0 +1,3 @@
+STDLIB = [
+    "hy.core.language"
+]
