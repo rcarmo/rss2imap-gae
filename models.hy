@@ -4,23 +4,23 @@
 
 
 (defclass Feed [Model]
-    [[url           (kwapply (StringProperty) {"required" true})]
+    [[url           (apply (StringProperty) {"required" true})]
      [last-checked  (DateTimeProperty)]
      [folder        (StringProperty)]])
 
 
 (defclass Account [Model]
-    [[username (kwapply (StringProperty) {"required" true})]
-     [password (kwapply (StringProperty) {"required" true})]
-     [server   (kwapply (StringProperty) {"required" true})]])
+    [[username (apply (StringProperty) {"required" true})]
+     [password (apply (StringProperty) {"required" true})]
+     [server   (apply (StringProperty) {"required" true})]])
 
 
 (defclass Subscription [Model]
     [[account  (KeyProperty Account)]
      [feed     (KeyProperty Feed)]
-     [items    (kwapply (KeyProperty Item)
-                        {"repeated" true "indexed" false})]])
+     [items    (apply (KeyProperty Item)
+                      {"repeated" true "indexed" false})]])
 
 (defclass Item [Model]
     [[subscription (KeyProperty Account)]
-     [data         (kwapply (StringProperty) {"indexed" false}]])
+     [data         (apply (StringProperty) {"indexed" false}]])

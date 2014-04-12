@@ -10,6 +10,6 @@
         (.debug log "Hy there!")
         "Hy there!"))
 
-(kwapply (run)
+(apply (run)
     {"app" app
      "server" "gae"})
