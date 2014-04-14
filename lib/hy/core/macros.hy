@@ -27,8 +27,8 @@
 
 
 (import [hy.models.list [HyList]]
-        [hy.models.symbol [HySymbol]])
-
+        [hy.models.symbol [HySymbol]]
+        [hy._compat [PY33 PY34]])
 
 
 (defmacro for [args &rest body]
@@ -45,10 +45,18 @@
 
   (if (empty? body)
     (macro-error None "`for' requires a body to evaluate"))
-  (if args
-    `(for* [~(.pop args 0) ~(.pop args 0)]
-       (for ~args ~@body))
-    `(do ~@body)))
+
+  (if (empty? args)
+    `(do ~@body)
+    (if (= (len args) 2)
+      ; basecase, let's just slip right in.
+      `(for* [~@args] ~@body)
+      ; otherwise, let's do some legit handling.
+      (let [[alist (slice args 0 nil 2)]
+            [ilist (slice args 1 nil 2)]]
+        `(do
+           (import itertools)
+           (for* [(, ~@alist) (itertools.product ~@ilist)] ~@body))))))
 
 
 (defmacro with [args &rest body]
@@ -70,12 +78,12 @@
       `(do ~@body)))
 
 
-(defmacro-alias [car first] [thing]
+(defmacro car [thing]
   "Get the first element of a list/cons"
   `(get ~thing 0))
 
 
-(defmacro-alias [cdr rest] [thing]
+(defmacro cdr [thing]
   "Get all the elements of a thing, except the first"
   `(slice ~thing 1))
 
@@ -130,6 +138,18 @@
   ret)
 
 
+(defmacro if-not [test not-branch &optional [yes-branch nil]]
+  "Like `if`, but execute the first branch when the test fails"
+  (if (nil? yes-branch)
+    `(if (not ~test) ~not-branch)
+    `(if (not ~test) ~not-branch ~yes-branch)))
+
+
+(defmacro-alias [lisp-if lif] [test &rest branches]
+  "Like `if`, but anything that is not None/nil is considered true."
+  `(if (is-not ~test nil) ~@branches))
+
+
 (defmacro when [test &rest body]
   "Execute `body` when `test` is true"
   `(if ~test (do ~@body)))
@@ -137,14 +157,8 @@
 
 (defmacro unless [test &rest body]
   "Execute `body` when `test` is false"
-  `(if ~test None (do ~@body)))
+  `(if-not ~test (do ~@body)))
 
-
-(defmacro yield-from [iterable]
-  "Yield all the items from iterable"
-  (let [[x (gensym)]]
-  `(for* [~x ~iterable]
-     (yield ~x))))
 
 (defmacro with-gensyms [args &rest body]
   `(let ~(HyList (map (fn [x] `[~x (gensym '~x)]) args))
@@ -156,30 +170,12 @@
        (let ~(HyList (map (fn [x] `[~x (gensym (slice '~x 2))]) syms))
             ~@body))))
 
-
-(defmacro kwapply [call kwargs]
-  "Use a dictionary as keyword arguments"
-  (let [[-fun (car call)]
-        [-args (cdr call)]
-        [-okwargs `[(list (.items ~kwargs))]]]
-    (while (= -fun "kwapply") ;; join any further kw
-      (if (not (= (len -args) 2))
-        (macro-error
-         call
-         (.format "Trying to call nested kwapply with {0} args instead of 2"
-                  (len -args))))
-      (.insert -okwargs 0 `(list (.items ~(car (cdr -args)))))
-      (setv -fun (car (car -args)))
-      (setv -args (cdr (car -args))))
-
-    `(apply ~-fun [~@-args] (dict (sum ~-okwargs [])))))
-
-
-(defmacro dispatch-reader-macro [char &rest body]
-  "Dispatch a reader macro based on the character"
-  (import [hy.macros])
-  (setv str_char (get char 1))
-  (if (not (in str_char hy.macros._hy_reader_chars))
-    (raise (hy.compiler.HyTypeError char (.format "There is no reader macro with the character `{0}`" str_char))))
-  `(do (import [hy.macros [_hy_reader]])
-       ((get (get _hy_reader --name--) ~char) ~(get body 0))))
+(defmacro-alias [defn-alias defun-alias] [names lambda-list &rest body]
+  "define one function with several names"
+  (let [[main (first names)]
+        [aliases (rest names)]]
+    (setv ret `(do (defn ~main ~lambda-list ~@body)))
+    (for* [name aliases]
+          (.append ret
+                   `(setv ~name ~main)))
+    ret))

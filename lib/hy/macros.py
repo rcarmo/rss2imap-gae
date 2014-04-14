@@ -43,7 +43,6 @@ EXTRA_MACROS = [
 
 _hy_macros = defaultdict(dict)
 _hy_reader = defaultdict(dict)
-_hy_reader_chars = set()
 
 
 def macro(name):
@@ -85,8 +84,6 @@ def reader(name):
             module_name = None
         _hy_reader[module_name][name] = fn
 
-        # Ugly hack to get some error handling
-        _hy_reader_chars.add(name)
         return fn
     return _
 
@@ -118,6 +115,7 @@ _wrappers = {
     str_type: HyString,
     dict: lambda d: HyDict(_wrap_value(x) for x in sum(d.items(), ())),
     list: lambda l: HyList(_wrap_value(x) for x in l),
+    tuple: lambda t: HyList(_wrap_value(x) for x in t),
     type(None): lambda foo: HySymbol("None"),
 }
 
@@ -209,3 +207,20 @@ def macroexpand_1(tree, module_name):
 
         return ntree
     return tree
+
+
+def reader_macroexpand(char, tree, module_name):
+    """Expand the reader macro "char" with argument `tree`."""
+    load_macros(module_name)
+
+    if char not in _hy_reader[module_name]:
+        raise HyTypeError(
+            char,
+            "`{0}' is not a reader macro in module '{1}'".format(
+                char,
+                module_name,
+            ),
+        )
+
+    expr = _hy_reader[module_name][char](tree)
+    return _wrap_value(expr).replace(tree)

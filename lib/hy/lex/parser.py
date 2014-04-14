@@ -24,6 +24,7 @@ from functools import wraps
 from rply import ParserGenerator
 
 from hy.models.complex import HyComplex
+from hy.models.cons import HyCons
 from hy.models.dict import HyDict
 from hy.models.expression import HyExpression
 from hy.models.float import HyFloat
@@ -95,9 +96,40 @@ def real_main_empty(p):
     return []
 
 
+def reject_spurious_dots(*items):
+    "Reject the spurious dots from items"
+    for list in items:
+        for tok in list:
+            if tok == "." and type(tok) == HySymbol:
+                raise LexException("Malformed dotted list",
+                                   tok.start_line, tok.start_column)
+
+
 @pg.production("paren : LPAREN list_contents RPAREN")
 @set_boundaries
 def paren(p):
+    cont = p[1]
+
+    # Dotted lists are expressions of the form
+    # (a b c . d)
+    # that evaluate to nested cons cells of the form
+    # (a . (b . (c . d)))
+    if len(cont) >= 3 and isinstance(cont[-2], HySymbol) and cont[-2] == ".":
+
+        reject_spurious_dots(cont[:-2], cont[-1:])
+
+        if len(cont) == 3:
+            # Two-item dotted list: return the cons cell directly
+            return HyCons(cont[0], cont[2])
+        else:
+            # Return a nested cons cell
+            return HyCons(cont[0], paren([p[0], cont[1:], p[2]]))
+
+    # Warn preemptively on a malformed dotted list.
+    # Only check for dots after the first item to allow for a potential
+    # attribute accessor shorthand
+    reject_spurious_dots(cont[1:])
+
     return HyExpression(p[1])
 
 
@@ -154,8 +186,8 @@ def term_unquote_splice(p):
 @set_quote_boundaries
 def hash_reader(p):
     st = p[0].getstr()[1]
-    str_object = HyExpression([HySymbol("quote"), HyString(st)])
-    expr = HyExpression([HySymbol("quote"), p[1]])
+    str_object = HyString(st)
+    expr = p[1]
     return HyExpression([HySymbol("dispatch_reader_macro"), str_object, expr])
 
 
@@ -242,14 +274,19 @@ def t_identifier(p):
     if obj.startswith("&"):
         return HyLambdaListKeyword(obj)
 
-    if obj.startswith("*") and obj.endswith("*") and obj not in ("*", "**"):
-        obj = obj[1:-1].upper()
+    def mangle(p):
+        if p.startswith("*") and p.endswith("*") and p not in ("*", "**"):
+            p = p[1:-1].upper()
 
-    if "-" in obj and obj != "-":
-        obj = obj.replace("-", "_")
+        if "-" in p and p != "-":
+            p = p.replace("-", "_")
 
-    if obj.endswith("?") and obj != "?":
-        obj = "is_%s" % (obj[:-1])
+        if p.endswith("?") and p != "?":
+            p = "is_%s" % (p[:-1])
+
+        return p
+
+    obj = ".".join([mangle(part) for part in obj.split(".")])
 
     return HySymbol(obj)
 

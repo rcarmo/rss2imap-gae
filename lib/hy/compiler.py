@@ -34,12 +34,13 @@ from hy.models.symbol import HySymbol
 from hy.models.float import HyFloat
 from hy.models.list import HyList
 from hy.models.dict import HyDict
+from hy.models.cons import HyCons
 
 from hy.errors import HyCompileError, HyTypeError
 
 import hy.macros
-from hy.macros import require, macroexpand
-from hy._compat import str_type, long_type
+from hy._compat import str_type, long_type, PY27, PY33, PY3, PY34
+from hy.macros import require, macroexpand, reader_macroexpand
 import hy.importer
 
 import traceback
@@ -77,7 +78,7 @@ _compile_table = {}
 
 
 def ast_str(foobar):
-    if sys.version_info[0] >= 3:
+    if PY3:
         return str(foobar)
 
     try:
@@ -597,6 +598,24 @@ class HyASTCompiler(object):
             return imports, HyExpression([HySymbol(name),
                                           contents]).replace(form), False
 
+        elif isinstance(form, HyCons):
+            ret = HyExpression([HySymbol(name)])
+            nimport, contents, splice = self._render_quoted_form(form.car,
+                                                                 level)
+            if splice:
+                raise HyTypeError(form, "Can't splice dotted lists yet")
+            imports.update(nimport)
+            ret.append(contents)
+
+            nimport, contents, splice = self._render_quoted_form(form.cdr,
+                                                                 level)
+            if splice:
+                raise HyTypeError(form, "Can't splice the cdr of a cons")
+            imports.update(nimport)
+            ret.append(contents)
+
+            return imports, ret.replace(form), False
+
         elif isinstance(form, (HySymbol, HyLambdaListKeyword)):
             return imports, HyExpression([HySymbol(name),
                                           HyString(form)]).replace(form), False
@@ -754,7 +773,7 @@ class HyASTCompiler(object):
 
         ret = handler_results
 
-        if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
+        if PY33:
             # Python 3.3 features a merge of TryExcept+TryFinally into Try.
             return ret + ast.Try(
                 lineno=expr.start_line,
@@ -831,7 +850,7 @@ class HyASTCompiler(object):
                     exceptions,
                     "Exception storage target name must be a symbol.")
 
-            if sys.version_info[0] >= 3:
+            if PY3:
                 # Python3 features a change where the Exception handler
                 # moved the name from a Name() to a pure Python String type.
                 #
@@ -998,6 +1017,28 @@ class HyASTCompiler(object):
 
         return ret
 
+    @builds("yield_from")
+    @checkargs(max=1)
+    def compile_yield_from_expression(self, expr):
+        if not PY33:
+            raise HyCompileError(
+                "yield-from only supported in python 3.3+!")
+
+        expr.pop(0)
+        ret = Result(contains_yield=True)
+
+        value = None
+        if expr != []:
+            ret += self.compile(expr.pop(0))
+            value = ret.force_expr
+
+        ret += ast.YieldFrom(
+            value=value,
+            lineno=expr.start_line,
+            col_offset=expr.start_column)
+
+        return ret
+
     @builds("import")
     def compile_import_expression(self, expr):
         def _compile_import(expr, module, names=None, importer=ast.Import):
@@ -1014,6 +1055,10 @@ class HyASTCompiler(object):
         rimports = Result()
         while len(expr) > 0:
             iexpr = expr.pop(0)
+
+            if not isinstance(iexpr, (HySymbol, HyList)):
+                raise HyTypeError(iexpr, "(import) requires a Symbol "
+                                  "or a List.")
 
             if isinstance(iexpr, HySymbol):
                 rimports += _compile_import(expr, iexpr)
@@ -1080,6 +1125,47 @@ class HyASTCompiler(object):
                 ctx=ast.Load())
 
         return ret + val
+
+    @builds(".")
+    @checkargs(min=1)
+    def compile_attribute_access(self, expr):
+        expr.pop(0)  # dot
+
+        ret = self.compile(expr.pop(0))
+
+        for attr in expr:
+            if isinstance(attr, HySymbol):
+                ret += ast.Attribute(lineno=attr.start_line,
+                                     col_offset=attr.start_column,
+                                     value=ret.force_expr,
+                                     attr=ast_str(attr),
+                                     ctx=ast.Load())
+            elif type(attr) == HyList:
+                if len(attr) != 1:
+                    raise HyTypeError(
+                        attr,
+                        "The attribute access DSL only accepts HySymbols "
+                        "and one-item lists, got {0}-item list instead".format(
+                            len(attr),
+                        ),
+                    )
+                compiled_attr = self.compile(attr.pop(0))
+                ret = compiled_attr + ret + ast.Subscript(
+                    lineno=attr.start_line,
+                    col_offset=attr.start_column,
+                    value=ret.force_expr,
+                    slice=ast.Index(value=compiled_attr.force_expr),
+                    ctx=ast.Load())
+            else:
+                raise HyTypeError(
+                    attr,
+                    "The attribute access DSL only accepts HySymbols "
+                    "and one-item lists, got {0} instead".format(
+                        type(attr).__name__,
+                    ),
+                )
+
+        return ret
 
     @builds("del")
     @checkargs(min=1)
@@ -1199,7 +1285,7 @@ class HyASTCompiler(object):
                             optional_vars=thing,
                             body=body.stmts)
 
-        if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
+        if PY33:
             the_with.items = [ast.withitem(context_expr=ctx.force_expr,
                                            optional_vars=thing)]
 
@@ -1224,39 +1310,112 @@ class HyASTCompiler(object):
                          ctx=ast.Load())
         return ret
 
+    def _compile_generator_iterables(self, trailers):
+        """Helper to compile the "trailing" parts of comprehensions:
+        generators and conditions"""
+
+        generators = trailers.pop(0)
+
+        cond = self.compile(trailers.pop(0)) if trailers != [] else Result()
+
+        gen_it = iter(generators)
+        paired_gens = zip(gen_it, gen_it)
+
+        gen_res = Result()
+        gen = []
+        for target, iterable in paired_gens:
+            comp_target = self.compile(target)
+            target = self._storeize(comp_target)
+            gen_res += self.compile(iterable)
+            gen.append(ast.comprehension(
+                target=target,
+                iter=gen_res.force_expr,
+                ifs=[]))
+
+        if cond.expr:
+            gen[-1].ifs.append(cond.expr)
+
+        return gen_res + cond, gen
+
     @builds("list_comp")
     @checkargs(min=2, max=3)
     def compile_list_comprehension(self, expr):
         # (list-comp expr (target iter) cond?)
         expr.pop(0)
         expression = expr.pop(0)
-        tar_it = iter(expr.pop(0))
-        targets = zip(tar_it, tar_it)
 
-        cond = self.compile(expr.pop(0)) if expr != [] else Result()
-
-        generator_res = Result()
-        generators = []
-        for target, iterable in targets:
-            comp_target = self.compile(target)
-            target = self._storeize(comp_target)
-            generator_res += self.compile(iterable)
-            generators.append(ast.comprehension(
-                target=target,
-                iter=generator_res.force_expr,
-                ifs=[]))
-
-        if cond.expr:
-            generators[-1].ifs.append(cond.expr)
+        gen_res, gen = self._compile_generator_iterables(expr)
 
         compiled_expression = self.compile(expression)
-        ret = compiled_expression + generator_res + cond
+        ret = compiled_expression + gen_res
         ret += ast.ListComp(
             lineno=expr.start_line,
             col_offset=expr.start_column,
             elt=compiled_expression.force_expr,
-            generators=generators)
+            generators=gen)
 
+        return ret
+
+    @builds("set_comp")
+    @checkargs(min=2, max=3)
+    def compile_set_comprehension(self, expr):
+        if PY27:
+            ret = self.compile_list_comprehension(expr)
+            expr = ret.expr
+            ret.expr = ast.SetComp(
+                lineno=expr.lineno,
+                col_offset=expr.col_offset,
+                elt=expr.elt,
+                generators=expr.generators)
+
+            return ret
+
+        expr[0] = HySymbol("list_comp").replace(expr[0])
+        expr = HyExpression([HySymbol("set"), expr]).replace(expr)
+        return self.compile(expr)
+
+    @builds("dict_comp")
+    @checkargs(min=3, max=4)
+    def compile_dict_comprehension(self, expr):
+        if PY27:
+            expr.pop(0)  # dict-comp
+            key = expr.pop(0)
+            value = expr.pop(0)
+
+            gen_res, gen = self._compile_generator_iterables(expr)
+
+            compiled_key = self.compile(key)
+            compiled_value = self.compile(value)
+            ret = compiled_key + compiled_value + gen_res
+            ret += ast.DictComp(
+                lineno=expr.start_line,
+                col_offset=expr.start_column,
+                key=compiled_key.force_expr,
+                value=compiled_value.force_expr,
+                generators=gen)
+
+            return ret
+
+        # In Python 2.6, turn (dict-comp key value [foo]) into
+        # (dict (list-comp (, key value) [foo]))
+
+        expr[0] = HySymbol("list_comp").replace(expr[0])
+        expr[1:3] = [HyExpression(
+            [HySymbol(",")] +
+            expr[1:3]
+        ).replace(expr[1])]
+        expr = HyExpression([HySymbol("dict"), expr]).replace(expr)
+        return self.compile(expr)
+
+    @builds("genexpr")
+    def compile_genexpr(self, expr):
+        ret = self.compile_list_comprehension(expr)
+        expr = ret.expr
+        ret.expr = ast.GeneratorExp(
+            lineno=expr.lineno,
+            col_offset=expr.col_offset,
+            elt=expr.elt,
+            generators=expr.generators)
         return ret
 
     @builds("apply")
@@ -1531,14 +1690,14 @@ class HyASTCompiler(object):
 
     @builds(HyExpression)
     def compile_expression(self, expression):
-        if expression == []:
-            return self.compile_list(expression)
-
         # Perform macro expansions
         expression = macroexpand(expression, self.module_name)
         if not isinstance(expression, HyExpression):
             # Go through compile again if the type changed.
             return self.compile(expression)
+
+        if expression == []:
+            return self.compile_list(expression)
 
         fn = expression[0]
         func = None
@@ -1699,12 +1858,32 @@ class HyASTCompiler(object):
         arglist = expression.pop(0)
         ret, args, defaults, stararg, kwargs = self._parse_lambda_list(arglist)
 
+        if PY34:
+            # Python 3.4+ requres that args are an ast.arg object, rather
+            # than an ast.Name or bare string.
+            args = [ast.arg(arg=ast_str(x),
+                            annotation=None,  # Fix me!
+                            lineno=x.start_line,
+                            col_offset=x.start_column) for x in args]
+
+            # XXX: Beware. Beware. This wasn't put into the parse lambda
+            # list because it's really just an internal parsing thing.
+
+            if kwargs:
+                kwargs = ast.arg(arg=kwargs, annotation=None)
+
+            if stararg:
+                stararg = ast.arg(arg=stararg, annotation=None)
+
+            # Let's find a better home for these guys.
+        else:
+            args = [ast.Name(arg=ast_str(x), id=ast_str(x),
+                             ctx=ast.Param(),
+                             lineno=x.start_line,
+                             col_offset=x.start_column) for x in args]
+
         args = ast.arguments(
-            args=[ast.Name(arg=ast_str(x), id=ast_str(x),
-                           ctx=ast.Param(),
-                           lineno=x.start_line,
-                           col_offset=x.start_column)
-                  for x in args],
+            args=args,
             vararg=stararg,
             kwarg=kwargs,
             kwonlyargs=[],
@@ -1846,7 +2025,7 @@ class HyASTCompiler(object):
         return ret
 
     @builds("defreader")
-    @checkargs(min=2, max=3)
+    @checkargs(min=2)
     def compile_reader(self, expression):
         expression.pop(0)
         name = expression.pop(0)
@@ -1868,6 +2047,23 @@ class HyASTCompiler(object):
 
         return ret
 
+    @builds("dispatch_reader_macro")
+    @checkargs(exact=2)
+    def compile_dispatch_reader_macro(self, expression):
+        expression.pop(0)  # dispatch-reader-macro
+        str_char = expression.pop(0)
+        if not type(str_char) == HyString:
+            raise HyTypeError(
+                str_char,
+                "Trying to expand a reader macro using `{0}' instead "
+                "of string".format(type(str_char).__name__),
+            )
+
+        module = self.module_name
+        expr = reader_macroexpand(str_char, expression.pop(0), module)
+
+        return self.compile(expr)
+
     @builds("eval_and_compile")
     def compile_eval_and_compile(self, expression):
         expression[0] = HySymbol("progn")
@@ -1884,6 +2080,10 @@ class HyASTCompiler(object):
                             compile_time_ns(self.module_name),
                             self.module_name)
         return Result()
+
+    @builds(HyCons)
+    def compile_cons(self, cons):
+        raise HyTypeError(cons, "Can't compile a top-level cons cell")
 
     @builds(HyInteger)
     def compile_integer(self, number):
