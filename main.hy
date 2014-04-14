@@ -10,6 +10,6 @@
         (.debug log "Hy there!")
         "Hy there!"))
 
-(apply (run)
-    {"app" app
+(apply run []
+    {"app"    app
      "server" "gae"})
