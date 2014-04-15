@@ -1,2 +1,2 @@
-bottle
-hy
+bottle>=0.12
+hy>=0.10
