@@ -14,6 +14,7 @@
         (.join ',' (set (list-comp (get tag term) [tag tags])))))
 
 (defn get-entry-author [entry]
+    """Select the best author information"""
     (get (get entry "author_detail" {"name" None}) "name" None))
     
 (defn get-entry-timestamp [entry]
@@ -23,3 +24,14 @@
             (if when
                 (mktime when))))
     (time))
+
+(defn get-entry-content [entry]
+    """Select the best content from an entry"""
+
+    (let [[candidates (+ (get entry "content" [])
+                         (get entry "summary_detail" []))]]
+
+        (for [c candidates]
+            (if (in "html" (get c "type" ""))
+                (get c "value")))
+        (get (get candidates 0) "value" "")))
