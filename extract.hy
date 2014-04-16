@@ -1,6 +1,10 @@
-(import os sys logging [time [mktime time]] [hashlib [sha1]])
+(import
+    os sys
+    [logging [getLogger]]
+    [time    [mktime time]]
+    [hashlib [sha1]])
 
-(setv log (.getLogger logging))
+(setv log (getLogger))
 
 (defn get-title [entry]
     """Returns the entry title, if any"""
