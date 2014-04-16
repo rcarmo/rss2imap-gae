@@ -1,10 +1,10 @@
 (import
     [google.appengine.ext.ndb
-        [Model LinkProperty StringProperty KeyProperty DateTimeProperty]])
+        [Model StringProperty KeyProperty DateTimeProperty]])
 
 
 (defclass Feed [Model]
-    [[url           (apply (StringProperty) {"required" true})]
+    [[url           (apply StringProperty [] {"required" true})]
      [last-checked  (DateTimeProperty)]
      [folder        (StringProperty)]])
 
@@ -23,4 +23,4 @@
 
 (defclass Item [Model]
     [[subscription (KeyProperty Account)]
-     [data         (apply StringProperty [] {"indexed" false}]])
+     [data         (apply StringProperty [] {"indexed" false})]])

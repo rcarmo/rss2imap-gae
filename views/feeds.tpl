@@ -10,7 +10,7 @@
     </div>
 </form>
 
-<table class="ink-table">
+<table class="ink-table alternating">
   <thead>
     <tr>
       <th>Feed URL</th>

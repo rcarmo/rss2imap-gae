@@ -1,9 +1,8 @@
-(import os sys logging feedparser)
+(import os sys [logging [getLogger]] feedparser)
 (require hy.contrib.loop)
 
 (apply logging.basicConfig [] {"format" "%(asctime)s %(funcName)s %(levelname)s %(message)s"})
-(setv log (.getLogger logging))
-(.setLevel log logging.DEBUG)
+(setv log (getLogger))
 
 (defn fetch-single-feed [url]
     ; returns all entries for this feed

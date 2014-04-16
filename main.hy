@@ -1,8 +1,12 @@
-(import os sys logging bottle)
-(import [bottle [DEBUG default_app run route view template]])
+(import os sys [logging [getLogger DEBUG]] bottle)
+(import [bottle [default_app run route view template]])
 
 (setv bottle.DEBUG true)
-(def log (.getLogger logging))
+(setv log (getLogger))
+(.setLevel log DEBUG)
+
+(import routes)
+
 (def app (default_app))
 
 (with-decorator (view "feeds")
