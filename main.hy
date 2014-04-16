@@ -1,14 +1,16 @@
 (import os sys logging bottle)
-(import [bottle [DEBUG default_app run route]])
+(import [bottle [DEBUG default_app run route view template]])
 
-(setv DEBUG true)
+(setv bottle.DEBUG true)
 (def log (.getLogger logging))
 (def app (default_app))
 
-(route "/" ["GET"]
-    (fn []
-        (.debug log "Hy there!")
-        "Hy there!"))
+(with-decorator (view "feeds")
+    (route "/" ["GET"]
+        (fn []
+            (.debug log "Hy there!")
+            {"title" "Feeds"
+             "feeds" [{"url" "test"}]})))
 
 (apply run []
     {"app"    app
