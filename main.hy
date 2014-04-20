@@ -9,13 +9,6 @@
 
 (def app (default_app))
 
-(with-decorator (view "feeds")
-    (route "/" ["GET"]
-        (fn []
-            (.debug log "Hy there!")
-            {"title" "Feeds"
-             "feeds" [{"url" "test"}]})))
-
 (apply run []
     {"app"    app
      "server" "gae"})
