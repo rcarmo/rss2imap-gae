@@ -5,7 +5,7 @@
     [hashlib              [sha1]]
     [models               [Feed]]
     [google.appengine.ext [ndb]]
-    [google.appengine.api [memcache]]) 
+    [google.appengine.api [memcache]])
 
 (setv log (getLogger))
 

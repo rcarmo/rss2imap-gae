@@ -1,6 +1,6 @@
 (import
-    [google.appengine.ext.ndb
-        [Model StringProperty KeyProperty DateTimeProperty]])
+    [google.appengine.ext.ndb [Model StringProperty DateTimeProperty KeyProperty]]
+)
 
 
 (defclass Feed [Model]
