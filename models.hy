@@ -5,8 +5,7 @@
 
 (defclass Feed [Model]
     [[url           (apply StringProperty [] {"required" true})]
-     [last-checked  (DateTimeProperty)]
-     [folder        (StringProperty)]])
+     [last-checked  (DateTimeProperty)]])
 
 
 (defclass Account [Model]
@@ -23,6 +22,7 @@
 (defclass Subscription [Model]
     [[account  (KeyProperty Account)]
      [feed     (KeyProperty Feed)]
+     [folder   (StringProperty)]
      [items    (apply KeyProperty [Item]
                       {"repeated" true "indexed" false})]])
 

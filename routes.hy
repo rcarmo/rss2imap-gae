@@ -14,6 +14,5 @@
     (fn []
         (let [[url (get (.forms request) "url" nil)]]
         ; TODO: urlparse it and abort if incorrect
-        (.log debug url)
-        )))
+        (.log debug url))))
 
