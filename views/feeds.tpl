@@ -17,7 +17,7 @@
       <th>Last Checked</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="feedlist">
 % for f in feeds:
     <tr>
       <td>{{f.get("url")}}</td>
@@ -27,5 +27,26 @@
   </tbody>
 </table>
 
+<script>
+var app = {};
+
+app.FeedList = function() {
+    return m.request({method: "GET", url: "/api/feeds"});
+}
+
+app.controller = function() {
+    this.feeds = app.FeedList();
+}
+
+app.view = function(ctrl) {
+    return ctrl.feeds().map(function(feed) {
+        return m("tr",
+            m("td", m("a", {href: feed.url})),
+            m("td", feed.updated));
+    })
+}
+
+m.module(document.getElementById("feedlist"), app);
+</script>
 
 % rebase('layout.tpl', title=title)

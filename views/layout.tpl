@@ -20,6 +20,7 @@
             <link rel="stylesheet" href="/static/css/ink-ie.min.css" type="text/css" media="screen" title="no title" charset="utf-8">
         <![endif]-->
 
+        <script type="text/javascript" src="/static/js/mithril.js"></script>
         <!-- test browser flexbox support and load legacy grid if unsupported -->
         <script type="text/javascript" src="/static/js/modernizr.js"></script>
         <script type="text/javascript">

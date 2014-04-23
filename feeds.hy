@@ -76,7 +76,7 @@
 (defn get-all-feeds []
     ; Return an iterator with all known feeds
 
-    (for [i (ndb.gql "SELECT id, url FROM Feed")]
+    (for [i (ndb.gql "SELECT * FROM Feed;")]
         (yield i)))
 
 
