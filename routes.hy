@@ -2,7 +2,7 @@
     os sys
     [logging    [getLogger]]
     [bottle     [route view template request]]
-    [decorators [jsonp]]
+    [decorators [jsonp cache-results timed]]
     [feeds      [get-all-feeds add-feed]])
 
 (setv log (getLogger))
@@ -14,7 +14,7 @@
                 (add-feed url)))))
 
 
-(with-decorator jsonp
+(with-decorator timed jsonp (cache-results 30)
     (route "/api/feeds" ["GET"]
         (fn []
             (list-comp
@@ -22,7 +22,7 @@
                  "last_checked" (. x last-checked)} [x (get-all-feeds)]))))
 
 
-(with-decorator (view "feeds")
+(with-decorator timed (cache-results 10) (view "feeds")
     (route "/" ["GET"]
         (fn []
             (.debug log "Hy there!")
