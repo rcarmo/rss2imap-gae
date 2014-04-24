@@ -1,9 +1,9 @@
 
-<form class="ink-form" action="/feeds/add" method="post">
+<form class="ink-form" action="/api/feeds" method="post">
     <div class="control-group column-group horizontal-gutters">
         <label for="url" class="all-10 align-right">URL</label>
         <div class="control append-button">
-            <input type="text" id="url">
+            <input type="text" name="url">
             <button class="ink-button">Add</button>
             <p class="tip">Enter a valid feed URL</p>
         </div>
@@ -18,12 +18,6 @@
     </tr>
   </thead>
   <tbody id="feedlist">
-% for f in feeds:
-    <tr>
-      <td>{{f.get("url")}}</td>
-      <td>{{f.get("updated", "Never")}}</td>
-    </tr>
-% end
   </tbody>
 </table>
 
@@ -40,9 +34,10 @@ app.controller = function() {
 
 app.view = function(ctrl) {
     return ctrl.feeds().map(function(feed) {
-        return m("tr",
-            m("td", m("a", {href: feed.url})),
-            m("td", feed.updated));
+        return m("tr", [
+            m("td", [m("a", {href: feed.url}, feed.url)]),
+            m("td", [feed.last_checked])
+        ])
     })
 }
 
