@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/rcarmo/rss2imap-gae.png?label=ready&title=Ready)](https://waffle.io/rcarmo/rss2imap-gae)
 rss2imap-gae
 ============
 
