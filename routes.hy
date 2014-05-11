@@ -9,9 +9,11 @@
 
 (route "/api/feeds" ["POST"]
     (fn [] 
+        (print "here")
         (let [[url (.get request.forms "url" nil)]]
             (if url
-                (add-feed url)))))
+                (add-feed url)))
+            {}))
 
 
 (with-decorator timed jsonp (cache-results 30)

@@ -21,6 +21,7 @@
         <![endif]-->
 
         <script type="text/javascript" src="/static/js/mithril.js"></script>
+        <script type="text/javascript" src="/static/js/app.js"></script>
         <!-- test browser flexbox support and load legacy grid if unsupported -->
         <script type="text/javascript" src="/static/js/modernizr.js"></script>
         <script type="text/javascript">
