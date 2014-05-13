@@ -21,7 +21,8 @@
         <![endif]-->
 
         <script type="text/javascript" src="/static/js/mithril.js"></script>
-        <script type="text/javascript" src="/static/js/app.js"></script>
+        <script type="text/javascript" src="/static/js/wisp-all.js"></script>
+        <script type="application/wisp" src="/static/wisp/app.wisp"></script>
         <!-- test browser flexbox support and load legacy grid if unsupported -->
         <script type="text/javascript" src="/static/js/modernizr.js"></script>
         <script type="text/javascript">
